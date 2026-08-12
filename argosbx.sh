@@ -1043,11 +1043,12 @@ elif command -v rc-service >/dev/null 2>&1 && [ "$EUID" -eq 0 ]; then
 cat > /etc/init.d/xray <<EOF
 #!/sbin/openrc-run
 description="xr service"
+supervisor="supervise-daemon"
 command="/root/agsbx/xray"
 command_args="run -c /root/agsbx/xr.json"
-command_background=yes
 pidfile="/run/xray.pid"
-command_background="yes"
+respawn_delay=3
+respawn_max=0
 depend() {
 need net
 }
@@ -1134,11 +1135,12 @@ elif command -v rc-service >/dev/null 2>&1 && [ "$EUID" -eq 0 ]; then
 cat > /etc/init.d/sing-box <<EOF
 #!/sbin/openrc-run
 description="sb service"
+supervisor="supervise-daemon"
 command="/root/agsbx/sing-box"
 command_args="run -c /root/agsbx/sb.json"
-command_background=yes
 pidfile="/run/sing-box.pid"
-command_background="yes"
+respawn_delay=3
+respawn_max=0
 depend() {
 need net
 }
@@ -1229,7 +1231,37 @@ echo "${ARGO_DOMAIN}" > "$HOME/agsbx/sbargoym.log"
 echo "${ARGO_AUTH}" > "$HOME/agsbx/sbargotoken.log"
 else
 argoname='临时'
+if command -v apk >/dev/null 2>&1 && command -v rc-service >/dev/null 2>&1 && [ "$EUID" -eq 0 ]; then
+cat > "$HOME/agsbx/argoloop.sh" <<EOF
+#!/bin/sh
+trap 'kill "\$cfpid" 2>/dev/null; exit 0' TERM INT
+rm -f "$HOME/agsbx/argo.log"
+"$HOME/agsbx/cloudflared" tunnel --url http://localhost:\$(cat "$HOME/agsbx/argoport.log" 2>/dev/null) --edge-ip-version auto --no-autoupdate --protocol http2 > "$HOME/agsbx/argo.log" 2>&1 &
+cfpid=\$!
+sleep 12
+HOME="$HOME" "$HOME/bin/agsbx" list >/dev/null 2>&1
+wait "\$cfpid"
+EOF
+chmod +x "$HOME/agsbx/argoloop.sh"
+cat > /etc/init.d/argo <<EOF
+#!/sbin/openrc-run
+description="argo service"
+supervisor="supervise-daemon"
+command="/bin/sh"
+command_args="$HOME/agsbx/argoloop.sh"
+pidfile="/run/argo.pid"
+respawn_delay=3
+respawn_max=0
+depend() {
+need net
+}
+EOF
+chmod +x /etc/init.d/argo >/dev/null 2>&1
+rc-update add argo default >/dev/null 2>&1
+rc-service argo start >/dev/null 2>&1
+else
 nohup "$HOME/agsbx/cloudflared" tunnel --url http://localhost:$(cat $HOME/agsbx/argoport.log) --edge-ip-version auto --no-autoupdate --protocol http2 > $HOME/agsbx/argo.log 2>&1 &
+fi
 fi
 echo "申请Argo$argoname隧道中……请稍等"
 sleep 15
@@ -1251,7 +1283,11 @@ if find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r 
 sed -i '/agsbx/d' ~/.bashrc
 SCRIPT_PATH="$HOME/bin/agsbx"
 mkdir -p "$HOME/bin"
+if cp -f "$0" "$SCRIPT_PATH" 2>/dev/null && [ -s "$SCRIPT_PATH" ] && grep -q '^#!/bin/bash' "$SCRIPT_PATH" 2>/dev/null; then
+:
+else
 (command -v curl >/dev/null 2>&1 && curl -sL "$agsbxurl" -o "$SCRIPT_PATH") || (command -v wget >/dev/null 2>&1 && wget -qO "$SCRIPT_PATH" "$agsbxurl")
+fi
 chmod +x "$SCRIPT_PATH"
 if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then
 echo "if ! find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -Eq 'agsbx/(s|x)' && ! pgrep -f 'agsbx/(s|x)' >/dev/null 2>&1; then echo '检测到系统可能中断过，或者变量格式错误？建议在SSH对话框输入 reboot 重启下服务器。现在自动执行Argosbx脚本的节点恢复操作，请稍等……'; sleep 6; export alns=\"${alns}\" cfip=\"${cfip}\" hyjpt=\"${hyjpt}\" cdnym=\"${cdnym}\" name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" $wap=\"${warp}\" $xhp=\"${port_xh}\" $xup=\"${port_xu}\" $vxp=\"${port_vx}\" $ssp=\"${port_ss}\" $sop=\"${port_so}\" $anp=\"${port_an}\" $arp=\"${port_ar}\" $vlp=\"${port_vl_re}\" $vwp=\"${port_vw}\" $vmp=\"${port_vm_ws}\" $hyp=\"${port_hy2}\" $tup=\"${port_tu}\" $xcp=\"${port_xc}\" $nvp=\"${port_nv}\" reym=\"${ym_vl_re}\" agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; bash "$HOME/bin/agsbx"; fi" >> ~/.bashrc
@@ -1279,15 +1315,7 @@ echo '@reboot sleep 10 && /bin/sh -c "nohup $HOME/agsbx/cloudflared tunnel --no-
 fi
 else
 if command -v apk >/dev/null 2>&1; then
-cat > /etc/local.d/alpineargosbx.start <<EOF
-#!/bin/bash
-sleep 10
-nohup $HOME/agsbx/cloudflared tunnel --url http://localhost:\$(cat $HOME/agsbx/argoport.log) --edge-ip-version auto --no-autoupdate --protocol http2 > $HOME/agsbx/argo.log 2>&1 &
-sleep 10
-HOME="$HOME" $HOME/bin/agsbx list >/dev/null 2>&1
-EOF
-chmod +x /etc/local.d/alpineargosbx.start
-rc-update add local default >/dev/null 2>&1
+:
 else
 echo '@reboot sleep 10 && /bin/bash -c "nohup $HOME/agsbx/cloudflared tunnel --url http://localhost:$(cat $HOME/agsbx/argoport.log) --edge-ip-version auto --no-autoupdate --protocol http2 > $HOME/agsbx/argo.log 2>&1 & sleep 10 && bash $HOME/bin/agsbx list >/dev/null 2>&1"' >> /tmp/crontab.tmp
 fi

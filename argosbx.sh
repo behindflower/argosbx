@@ -1290,7 +1290,7 @@ else
 fi
 chmod +x "$SCRIPT_PATH"
 if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then
-echo "if ! find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -Eq 'agsbx/(s|x)' && ! pgrep -f 'agsbx/(s|x)' >/dev/null 2>&1; then echo '检测到系统可能中断过，或者变量格式错误？建议在SSH对话框输入 reboot 重启下服务器。现在自动执行Argosbx脚本的节点恢复操作，请稍等……'; sleep 6; export alns=\"${alns}\" cfip=\"${cfip}\" hyjpt=\"${hyjpt}\" cdnym=\"${cdnym}\" name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" $wap=\"${warp}\" $xhp=\"${port_xh}\" $xup=\"${port_xu}\" $vxp=\"${port_vx}\" $ssp=\"${port_ss}\" $sop=\"${port_so}\" $anp=\"${port_an}\" $arp=\"${port_ar}\" $vlp=\"${port_vl_re}\" $vwp=\"${port_vw}\" $vmp=\"${port_vm_ws}\" $hyp=\"${port_hy2}\" $tup=\"${port_tu}\" $xcp=\"${port_xc}\" $nvp=\"${port_nv}\" reym=\"${ym_vl_re}\" agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; bash "$HOME/bin/agsbx"; fi" >> ~/.bashrc
+echo "if ! find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -Eq 'agsbx/(s|x)' && ! pgrep -f 'agsbx/(s|x)' >/dev/null 2>&1; then echo '检测到系统可能中断过，或者变量格式错误？建议在SSH对话框输入 reboot 重启下服务器。现在自动执行Argosbx脚本的节点恢复操作，请稍等……'; sleep 6; export alns=\"${alns}\" cfip=\"${cfip}\" cfarea=\"${cfarea}\" hyjpt=\"${hyjpt}\" cdnym=\"${cdnym}\" name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" warp=\"${warp}\" xhpt=\"${port_xh}\" xupt=\"${port_xu}\" vxpt=\"${port_vx}\" sspt=\"${port_ss}\" sopt=\"${port_so}\" anpt=\"${port_an}\" arpt=\"${port_ar}\" vlpt=\"${port_vl_re}\" vwpt=\"${port_vw}\" vmpt=\"${port_vm_ws}\" hypt=\"${port_hy2}\" tupt=\"${port_tu}\" xcpt=\"${port_xc}\" nvpt=\"${port_nv}\" reym=\"${ym_vl_re}\" agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; bash "$HOME/bin/agsbx"; fi" >> ~/.bashrc
 fi
 sed -i '/export PATH="\$HOME\/bin:\$PATH"/d' ~/.bashrc
 echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
@@ -1333,6 +1333,75 @@ cdnip1="$1"
 cdnip2="$2"
 echo "$cdnip1" > "$HOME/agsbx/cdnip1"
 echo "$cdnip2" > "$HOME/agsbx/cdnip2"
+rm -f "$HOME/agsbx/cfarea" 2>/dev/null
+rm -f "$HOME/agsbx/cdnips_all" 2>/dev/null
+if command -v crontab >/dev/null 2>&1; then
+crontab -l > /tmp/crontab.tmp 2>/dev/null
+sed -i '/agsbxcfarea/d' /tmp/crontab.tmp
+crontab /tmp/crontab.tmp >/dev/null 2>&1
+rm -f /tmp/crontab.tmp
+fi
+elif [ -n "$cfarea" ]; then
+echo "$cfarea" > "$HOME/agsbx/cfarea"
+case "$cfarea" in
+jp) arealist="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/JP.txt" ;;
+us) arealist="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/US.txt" ;;
+de) arealist="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/DE.txt" ;;
+nl|hl) arealist="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/NL.txt" ;;
+sg) arealist="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/SG.txt" ;;
+*) arealist="" ;;
+esac
+arealist_content=""
+if [ -n "$arealist" ]; then
+arealist_content=$( (command -v curl >/dev/null 2>&1 && curl -Ls "$arealist" 2>/dev/null) || (command -v wget >/dev/null 2>&1 && wget -qO- "$arealist" 2>/dev/null) )
+fi
+arealist_content=$(echo "$arealist_content" | sed 's/#.*//' | sed '/^$/d')
+if [ -n "$arealist_content" ]; then
+echo "$arealist_content" > "$HOME/agsbx/cdnips_all"
+cdnip1=$(echo "$arealist_content" | sed -n '1p')
+cdnip2=$(echo "$arealist_content" | sed -n '2p')
+echo "已获取【$cfarea】地区优选IP：共$(echo "$arealist_content" | wc -l)个"
+else
+echo "地区优选IP列表获取失败，改用默认优选IP"
+rm -f "$HOME/agsbx/cdnips_all" 2>/dev/null
+cdnip1="www.shopify.com"
+cdnip2="www.wto.org"
+fi
+echo "$cdnip1" > "$HOME/agsbx/cdnip1"
+echo "$cdnip2" > "$HOME/agsbx/cdnip2"
+cat > "$HOME/agsbx/cfarea_refresh.sh" <<EOF
+#!/bin/bash
+cfa=\$(cat "$HOME/agsbx/cfarea" 2>/dev/null)
+case "\$cfa" in
+jp) al="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/JP.txt" ;;
+us) al="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/US.txt" ;;
+de) al="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/DE.txt" ;;
+nl|hl) al="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/NL.txt" ;;
+sg) al="https://raw.githubusercontent.com/gslege/CloudflareIP/refs/heads/main/SG.txt" ;;
+*) al="" ;;
+esac
+if [ -n "\$al" ]; then
+c=\$( (command -v curl >/dev/null 2>&1 && curl -Ls "\$al" 2>/dev/null) || (command -v wget >/dev/null 2>&1 && wget -qO- "\$al" 2>/dev/null) )
+c=\$(echo "\$c" | sed 's/#.*//' | sed '/^\$/d')
+if [ -n "\$c" ]; then
+echo "\$c" > "$HOME/agsbx/cdnips_all"
+echo "\$c" | sed -n '1p' > "$HOME/agsbx/cdnip1"
+echo "\$c" | sed -n '2p' > "$HOME/agsbx/cdnip2"
+fi
+fi
+bash "$HOME/bin/agsbx" list >/dev/null 2>&1
+EOF
+chmod +x "$HOME/agsbx/cfarea_refresh.sh"
+if command -v crontab >/dev/null 2>&1; then
+crontab -l > /tmp/crontab.tmp 2>/dev/null
+sed -i '/agsbxcfarea/d' /tmp/crontab.tmp
+echo "@reboot sleep 15 && /bin/bash \"$HOME/agsbx/cfarea_refresh.sh\" >/dev/null 2>&1 # agsbxcfarea" >> /tmp/crontab.tmp
+echo "*/15 * * * * /bin/bash \"$HOME/agsbx/cfarea_refresh.sh\" >/dev/null 2>&1 # agsbxcfarea" >> /tmp/crontab.tmp
+crontab /tmp/crontab.tmp >/dev/null 2>&1
+rm -f /tmp/crontab.tmp
+else
+echo "未检测到crontab命令,无法注册开机自动刷新地区优选IP任务,建议自行安装cron"
+fi
 else
 if [ -s "$HOME/agsbx/cdnip1" ] && [ -s "$HOME/agsbx/cdnip2" ]; then
 cdnip1=$(cat "$HOME/agsbx/cdnip1")
@@ -1488,12 +1557,7 @@ echo
 fi
 fi
 if grep vless-ws "$HOME/agsbx/xr.json" >/dev/null 2>&1; then
-echo "💣【 Vless-ws 】节点信息如下："
 port_vw=$(cat "$HOME/agsbx/port_vw")
-vl_vw_link="vless://$uuid@$server_ip:$port_vw?encryption=none&type=ws&path=$uuid-vw#${sxname}vl-ws-$hostname"
-echo "$vl_vw_link" >> "$HOME/agsbx/jhsub.txt"
-echo "$vl_vw_link"
-echo
 if [ -f "$HOME/agsbx/cdnym" ]; then
 echo "💣【 Vless-ws-cdn 】节点信息如下："
 echo "可自行更换优选IP域名，如是回源端口需手动修改443或者80系端口"
@@ -2227,6 +2291,18 @@ echo "- ${sxname}vmess-ws-tls-argo-$hostname-443"
 echo "- ${sxname}vmess-ws-argo-$hostname-80"
 }
 elif [ "$vlvm" = "Vless" ]; then
+areaname=$(cat "$HOME/agsbx/cfarea" 2>/dev/null)
+if [ -s "$HOME/agsbx/cdnips_all" ] && [ -n "$areaname" ]; then
+n=0
+while IFS= read -r ip; do
+[ -z "$ip" ] && continue
+n=$((n+1))
+vwarea_link="vless://$uuid@$ip:443?encryption=none&type=ws&host=$argodomain&path=$uuid-vw&security=tls&sni=$argodomain&fp=chrome&insecure=0&allowInsecure=0#${sxname}vless-ws-tls-argo-${areaname}${n}-$hostname"
+echo "$vwarea_link" >> "$HOME/agsbx/jhsub.txt"
+[ "$n" -eq 1 ] && vwatls_link1="$vwarea_link"
+done < "$HOME/agsbx/cdnips_all"
+areanodecount="$n"
+else
 vwatls_link1="vless://$uuid@$cdnip1:443?encryption=none&type=ws&host=$argodomain&path=$uuid-vw&security=tls&sni=$argodomain&fp=chrome&insecure=0&allowInsecure=0#${sxname}vless-ws-tls-argo-$hostname-443"
 echo "$vwatls_link1" >> "$HOME/agsbx/jhsub.txt"
 vwatls_link2="vless://$uuid@yg2.ygkkk.dpdns.org:8443?encryption=none&type=ws&host=$argodomain&path=$uuid-vw&security=tls&sni=$argodomain&fp=chrome&insecure=0&allowInsecure=0#${sxname}vless-ws-tls-argo-$hostname-8443"
@@ -2254,10 +2330,24 @@ echo "$vwa_link12" >> "$HOME/agsbx/jhsub.txt"
 vwa_link13="vless://$uuid@[2400:cb00:2049::0]:2095?encryption=none&type=ws&host=$argodomain&path=$uuid-vw&security=none#${sxname}vless-ws-argo-$hostname-2095"
 echo "$vwa_link13" >> "$HOME/agsbx/jhsub.txt"
 fi
+fi
 sbtk=$(cat "$HOME/agsbx/sbargotoken.log" 2>/dev/null)
 if [ -n "$sbtk" ]; then
 nametn="Argo固定隧道token：$sbtk"
 fi
+if [ -n "$areanodecount" ]; then
+argoshow=$(
+echo "Argo隧道端口正在使用$vlvm-ws主协议端口：$(cat $HOME/agsbx/argoport.log 2>/dev/null)
+Argo域名：$argodomain
+$nametn
+
+已按【$areaname】地区生成 $areanodecount 个优选IP的$vlvm-ws-tls-argo节点(443端口)，示例：
+${vmatls_link1}${vwatls_link1}
+
+完整 $areanodecount 个节点已写入订阅文件，可执行 list 命令或查看订阅链接获取全部
+"
+)
+else
 argoshow=$(
 echo "Argo隧道端口正在使用$vlvm-ws主协议端口：$(cat $HOME/agsbx/argoport.log 2>/dev/null)
 Argo域名：$argodomain
@@ -2270,6 +2360,7 @@ ${vmatls_link1}${vwatls_link1}
 ${vma_link7}${vwa_link7}
 "
 )
+fi
 fi
 
 get_func() {

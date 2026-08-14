@@ -55,7 +55,7 @@ export warp=${warp:-''}
 export name=${name:-''}
 export oap=${oap:-''}
 v46url="https://icanhazip.com"
-agsbxurl="https://raw.githubusercontent.com/yonggekkk/argosbx/main/argosbx.sh"
+agsbxurl="https://raw.githubusercontent.com/behindflower/argosbx/refs/heads/main/argosbx.sh"
 showmode(){
 echo "Argosbx脚本一键SSH命令生器在线网址：https://yonggekkk.github.io/argosbx/"
 echo "主脚本：bash <(curl -Ls https://raw.githubusercontent.com/yonggekkk/argosbx/main/argosbx.sh) 或 bash <(wget -qO- https://raw.githubusercontent.com/yonggekkk/argosbx/main/argosbx.sh)"
@@ -1285,6 +1285,8 @@ SCRIPT_PATH="$HOME/bin/agsbx"
 mkdir -p "$HOME/bin"
 if cp -f "$0" "$SCRIPT_PATH" 2>/dev/null && [ -s "$SCRIPT_PATH" ] && grep -q '^#!/bin/bash' "$SCRIPT_PATH" 2>/dev/null; then
 :
+elif [ -s "$SCRIPT_PATH" ] && grep -q '^#!/bin/bash' "$SCRIPT_PATH" 2>/dev/null; then
+echo "提示：本次未能复制当前脚本(可能是通过管道/进程替换方式运行)，已保留本地原有的 $SCRIPT_PATH，未做覆盖"
 else
 (command -v curl >/dev/null 2>&1 && curl -sL "$agsbxurl" -o "$SCRIPT_PATH") || (command -v wget >/dev/null 2>&1 && wget -qO "$SCRIPT_PATH" "$agsbxurl")
 fi
@@ -1361,9 +1363,12 @@ echo "$arealist_content" > "$HOME/agsbx/cdnips_all"
 cdnip1=$(echo "$arealist_content" | sed -n '1p')
 cdnip2=$(echo "$arealist_content" | sed -n '2p')
 echo "已获取【$cfarea】地区优选IP：共$(echo "$arealist_content" | wc -l)个"
+elif [ -s "$HOME/agsbx/cdnips_all" ]; then
+echo "本次地区优选IP列表获取失败，暂时沿用上次缓存的完整列表(共$(wc -l < "$HOME/agsbx/cdnips_all")个)"
+cdnip1=$(sed -n '1p' "$HOME/agsbx/cdnips_all")
+cdnip2=$(sed -n '2p' "$HOME/agsbx/cdnips_all")
 else
-echo "地区优选IP列表获取失败，改用默认优选IP"
-rm -f "$HOME/agsbx/cdnips_all" 2>/dev/null
+echo "地区优选IP列表获取失败，且本地无缓存，暂用默认优选IP"
 cdnip1="www.shopify.com"
 cdnip2="www.wto.org"
 fi

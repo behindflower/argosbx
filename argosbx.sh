@@ -105,6 +105,17 @@ v6=$( (command -v curl >/dev/null 2>&1 && curl -s6m5 -k "$v46url" 2>/dev/null) |
 v4dq=$( (command -v curl >/dev/null 2>&1 && curl -s4m5 -k https://myip.ipip.net/ | awk -F'来自于：' '{print $2}' 2>/dev/null) || (command -v wget >/dev/null 2>&1 && timeout 3 wget -4 --tries=2 -qO- https://myip.ipip.net/ | awk -F'来自于：' '{print $2}' 2>/dev/null) )
 v6dq=$( (command -v curl >/dev/null 2>&1 && curl -s6m5 -k https://ip.fm | sed -n 's/.*Location: //p' 2>/dev/null) || (command -v wget >/dev/null 2>&1 && timeout 3 wget -6 --tries=2 -qO- https://ip.fm | grep '<span class="has-text-grey-light">Location:' | tail -n1 | sed -E 's/.*>Location: <\/span>([^<]+)<.*/\1/' 2>/dev/null) )
 }
+tcpbuf(){
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-argosbx-tcpbuf.conf <<EOF
+net.ipv4.tcp_rmem = 4096 87380 2097152
+net.ipv4.tcp_wmem = 4096 16384 2097152
+EOF
+if command -v sysctl >/dev/null 2>&1; then
+sysctl -p /etc/sysctl.d/99-argosbx-tcpbuf.conf >/dev/null 2>&1
+echo "TCP读写缓存已限制：rmem=4096 87380 2097152，wmem=4096 16384 2097152(已持久化，重启依然生效)"
+fi
+}
 warpsx(){
 warpurl=$( (command -v curl >/dev/null 2>&1 && curl -sm5 -k https://warp.xijp.eu.org 2>/dev/null) || (command -v wget >/dev/null 2>&1 && timeout 3 wget --tries=2 -qO- https://warp.xijp.eu.org 2>/dev/null) )
 if [ -z "$warpurl" ] || printf '%s' "$warpurl" | grep -q html; then
@@ -454,50 +465,6 @@ else
 xcp=xcptargo
 fi
 
-if [ -n "$vwp" ]; then
-vwp=vwpt
-if [ -z "$port_vw" ] && [ ! -e "$HOME/agsbx/port_vw" ]; then
-port_vw=$(shuf -i 10000-65535 -n 1)
-echo "$port_vw" > "$HOME/agsbx/port_vw"
-elif [ -n "$port_vw" ]; then
-echo "$port_vw" > "$HOME/agsbx/port_vw"
-fi
-port_vw=$(cat "$HOME/agsbx/port_vw")
-echo "Vless-ws端口：$port_vw"
-if [ -n "$cdnym" ]; then
-echo "$cdnym" > "$HOME/agsbx/cdnym"
-echo "80系CDN或者回源CDN的host域名 (确保IP已解析在CF域名)：$cdnym"
-fi
-cat >> "$HOME/agsbx/xr.json" <<EOF
-    {
-      "tag":"vless-ws",
-      "listen": "::",
-      "port": ${port_vw},
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "${uuid}"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "${uuid}-vw"
-        }
-      },
-        "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"],
-        "metadataOnly": false
-      }
-    },
-EOF
-else
-vwp=vwptargo
-fi
 if [ -n "$vlp" ]; then
 vlp=vlpt
 if [ -z "$port_vl_re" ] && [ ! -e "$HOME/agsbx/port_vl_re" ]; then
@@ -899,6 +866,75 @@ vmp=vmptargo
 fi
 }
 
+xrsbvw(){
+if [ -n "$vwp" ]; then
+vwp=vwpt
+if [ -z "$port_vw" ] && [ ! -e "$HOME/agsbx/port_vw" ]; then
+port_vw=$(shuf -i 10000-65535 -n 1)
+echo "$port_vw" > "$HOME/agsbx/port_vw"
+elif [ -n "$port_vw" ]; then
+echo "$port_vw" > "$HOME/agsbx/port_vw"
+fi
+port_vw=$(cat "$HOME/agsbx/port_vw")
+echo "Vless-ws端口：$port_vw"
+if [ -n "$cdnym" ]; then
+echo "$cdnym" > "$HOME/agsbx/cdnym"
+echo "80系CDN或者回源CDN的host域名 (确保IP已解析在CF域名)：$cdnym"
+fi
+if [ -e "$HOME/agsbx/xr.json" ]; then
+cat >> "$HOME/agsbx/xr.json" <<EOF
+    {
+      "tag":"vless-ws",
+      "listen": "::",
+      "port": ${port_vw},
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${uuid}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "${uuid}-vw"
+        }
+      },
+        "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"],
+        "metadataOnly": false
+      }
+    },
+EOF
+else
+cat >> "$HOME/agsbx/sb.json" <<EOF
+        {
+            "type": "vless",
+            "tag": "vless-sb",
+            "listen": "::",
+            "listen_port": ${port_vw},
+            "users": [
+                {
+                    "uuid": "${uuid}"
+                }
+            ],
+            "transport": {
+                "type": "ws",
+                "path": "${uuid}-vw",
+                "max_early_data":2048,
+                "early_data_header_name": "Sec-WebSocket-Protocol"
+            }
+        },
+EOF
+fi
+else
+vwp=vwptargo
+fi
+}
+
 xrsbso(){
 if [ -n "$sop" ]; then
 sop=sopt
@@ -1154,10 +1190,12 @@ fi
 fi
 }
 ins(){
+tcpbuf
 if [ "$nvp" != yes ] && [ "$tup" != yes ] && [ "$anp" != yes ] && [ "$arp" != yes ] && [ "$ssp" != yes ]; then
 installxray
 xrsbhy2
 xrsbvm
+xrsbvw
 xrsbso
 warpsx
 xrsbout
@@ -1166,6 +1204,7 @@ elif [ "$xhp" != yes ] && [ "$vlp" != yes ] && [ "$vxp" != yes ] && [ "$vwp" != 
 installsb
 xrsbhy2
 xrsbvm
+xrsbvw
 xrsbso
 warpsx
 xrsbout
@@ -1175,6 +1214,7 @@ installsb
 installxray
 xrsbhy2
 xrsbvm
+xrsbvw
 xrsbso
 warpsx
 xrsbout
@@ -1561,7 +1601,7 @@ echo "$vl_vx_cdn_link"
 echo
 fi
 fi
-if grep vless-ws "$HOME/agsbx/xr.json" >/dev/null 2>&1; then
+if [ -e "$HOME/agsbx/port_vw" ]; then
 port_vw=$(cat "$HOME/agsbx/port_vw")
 if [ -f "$HOME/agsbx/cdnym" ]; then
 echo "💣【 Vless-ws-cdn 】节点信息如下："
